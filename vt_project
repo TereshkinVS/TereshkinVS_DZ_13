@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""
+vt_api.py — пример работы с API антивирусной системы VirusTotal.
+
+Что делает скрипт:
+1. Берёт API-ключ из переменной окружения VT_API_KEY.
+2. Отправляет HTTP GET-запрос к VirusTotal API v3 для информации о файле по его хэшу.
+3. Получает JSON-ответ и:
+   - печатает его в консоль (в отформатированном виде),
+   - сохраняет в файл vt_result.json,
+   - выводит краткую статистику сканирования (malicious, suspicious и т.д.).
+
+Как использовать:
+1. Зарегистрируйтесь на https://www.virustotal.com и получите API-ключ.
+2. Установите библиотеку requests:  pip install requests
+3. Установите переменную окружения VT_API_KEY со значением вашего ключа.
+4. В переменную FILE_HASH подставьте хэш интересующего файла (MD5/SHA256 и т.п.).
+5. Запустите скрипт:  python vt_api.py
+"""
+
+import os
+import json
+import requests
+
+
+# ==============================
+# НАСТРОЙКИ
+# ==============================
+
+# Способ 1 (рекомендуемый): хранить ключ в переменной окружения
+# Linux / Mac:
+#   export VT_API_KEY="ваш_ключ"
+# Windows (PowerShell):
+#   setx VT_API_KEY "ваш_ключ"
+
+API_KEY = os.getenv("VT_API_KEY")
+
+# Способ 2 (менее безопасный — только для теста):
+# API_KEY = "ВСТАВЬТЕ_СЮДА_ВАШ_КЛЮЧ"
+
+# Пример хэша файла (EICAR тестовый файл, можете заменить на свой)
+FILE_HASH = "44d88612fea8a8f36de82e1278abb02f"
+
+if not API_KEY:
+    raise ValueError("API ключ не найден! "
+                     "Задайте переменную окружения VT_API_KEY или пропишите ключ в коде.")
+
+# Базовый URL для запроса информации о файле по его хэшу
+url = f"https://www.virustotal.com/api/v3/files/{FILE_HASH}"
+
+# Заголовки запроса, где x-apikey — это наш API-ключ
+headers = {
+    "x-apikey": API_KEY
+}
+
+# ==============================
+# ОТПРАВКА ЗАПРОСА
+# ==============================
+
+response = requests.get(url, headers=headers)
+
+if response.status_code == 200:
+    print("Запрос выполнен успешно.")
+    data = response.json()
+
+    # Сохраняем полный JSON-ответ в файл
+    with open("vt_result.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+
+    # Печатаем JSON в консоль (по желанию можно закомментировать)
+    print("\nПолный JSON-ответ:")
+    print(json.dumps(data, indent=4, ensure_ascii=False))
+
+    # ==============================
+    # ВЫВОД КРАТКОЙ СТАТИСТИКИ
+    # ==============================
+    try:
+        stats = data["data"]["attributes"]["last_analysis_stats"]
+
+        print("\nСтатистика сканирования файла:")
+        print(f"Вредоносных детектов: {stats['malicious']}")
+        print(f"Подозрительных:       {stats['suspicious']}")
+        print(f"Безопасных:           {stats['harmless']}")
+        print(f"Неопределённых:       {stats['undetected']}")
+    except (KeyError, TypeError):
+        print("Не удалось извлечь last_analysis_stats из ответа API.")
+else:
+    print(f"Ошибка: {response.status_code}")
+    print(response.text)
